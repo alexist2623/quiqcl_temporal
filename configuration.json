@@ -1,0 +1,14 @@
+{
+    "server" : {
+        "ip" : "172.0.0.1"
+    },
+    "device" : {
+        "hellodevice" : {
+            "args" : {
+                "a" : "345"
+            },
+            "class" : "hello",
+            "import" : "hi.bye"
+        }
+    }
+}
