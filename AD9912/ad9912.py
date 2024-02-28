@@ -5,6 +5,8 @@ Created on Fri Aug 21 16:15:41 2020
 @author: Modified by Jiyong Yu (Original work by Taehyun Kim)
 
 Modified again by Jiyong Kang (Aug 2021).
+
+Modified again by Jeonghyun Park (Feb 2024).
 """
 
 # Created for controlling triple DDS Board simultaneously
@@ -14,6 +16,7 @@ import math
 import os.path
 
 import protocol.basic as bp
+from util import *
 
 class AD9912(bp.BasicProtocol):
     """This implements TrippleBoard_AD9912 device.
@@ -24,7 +27,10 @@ class AD9912(bp.BasicProtocol):
     For more detailed information, see AD9912 manual.
     """
 
-    def __init__(self, port_or_com, min_freq=10, max_freq=400):
+    def __init__(self, 
+                 port_or_com : str, 
+                 min_freq : float =10, 
+                 max_freq : float =400):
         """
         Args:
             port_or_com: str or serial.Serial object that connects to the FPGA
@@ -34,10 +40,13 @@ class AD9912(bp.BasicProtocol):
             max_freq: Maximum frequency limit.
         """
         super().__init__(port_or_com)
-        self.min_freq = min_freq
-        self.max_freq = max_freq
+        self.min_freq : float = min_freq
+        self.max_freq : float = max_freq
         
-    def make_header_string(self, register_address, bytes_length, direction='W'):
+    def make_header_string(self, 
+                           register_address : int, 
+                           bytes_length : int, 
+                           direction : str='W'):
         """Makes header string following the protocol.
 
         Args:
@@ -76,7 +85,8 @@ class AD9912(bp.BasicProtocol):
         header_value = (MSB << 15) + (W1W0 << 13) + address
         return f'{header_value:04X}'
     
-    def FTW_Hz(self, freq):
+    def FTW_Hz(self, 
+               freq : float):
         # make_header_string('0x01AB', 8)
         FTW_header = '61AB'
         y = int((2**48)*(freq/(10**9)))
@@ -84,7 +94,10 @@ class AD9912(bp.BasicProtocol):
         FTW_body = (12-len(z))*'0' + z
         return FTW_header + FTW_body
     
-    def make_9int_list(self, hex_string, ch1, ch2):
+    def make_9int_list(self, 
+                       hex_string : str, 
+                       ch1 : bool, 
+                       ch2 : bool):
         hex_string_length = len(hex_string)
         byte_length = (hex_string_length // 2)
         if hex_string_length % 2 != 0:
@@ -99,7 +112,8 @@ class AD9912(bp.BasicProtocol):
         
         return int_list
     
-    def board_select(self, board_number):
+    def board_select(self, 
+                     board_number : str):
         # Board selection among triple DDS board
         self._send_command(f'Board{board_number} Select')
 
@@ -110,13 +124,17 @@ class AD9912(bp.BasicProtocol):
                              f'{freq_in_MHz}MHz is given.')
             
         self._send_mod_BTF(
-            self.make_9int_list(self.FTW_Hz(freq_in_MHz*1e6), ch1, ch2))
+            self.make_9int_list(self.FTW_Hz(freq_in_MHz*1e6), ch1, ch2)
+            )
         self._send_command('WRITE DDS REG')
         # Update the buffered (mirrored) registers
         self._send_mod_BTF(self.make_9int_list('000501', ch1, ch2))
         self._send_command('WRITE DDS REG')
 
-    def set_current(self, current, ch1, ch2):
+    def set_current(self, 
+                    current : float, 
+                    ch1 : bool, 
+                    ch2 : bool):
         # DAC full-scale current
         # 1020 mVp-p (264*I_DAC_REF) => 670 mVp-p w/ FDB_IN
         #  270 mVp-p  (72*I_DAC_REF) => 180 mVp-p w/ FDB_IN
@@ -128,7 +146,9 @@ class AD9912(bp.BasicProtocol):
         self._send_mod_BTF(self.make_9int_list(hex_str, ch1, ch2))
         self._send_command('WRITE DDS REG')
     
-    def soft_reset(self, ch1, ch2):
+    def soft_reset(self, 
+                   ch1 : bool, 
+                   ch2 : bool):
         self._send_mod_BTF(
             self.make_9int_list(self.make_header_string(0, 1)+'3C', ch1, ch2))
         self._send_command('WRITE DDS REG')
@@ -136,7 +156,10 @@ class AD9912(bp.BasicProtocol):
             self.make_9int_list(self.make_header_string(0, 1)+'18', ch1, ch2))
         self._send_command('WRITE DDS REG')
         
-    def set_phase(self, phase, ch1, ch2):
+    def set_phase(self, 
+                  phase : float, 
+                  ch1 : bool, 
+                  ch2 : bool):
         # Convert phase into radian
         phase_rad = (math.pi / 180) * phase
         # Convert phase for DDS
@@ -154,14 +177,134 @@ class AD9912(bp.BasicProtocol):
         self._send_mod_BTF(self.make_9int_list('000501', ch1, ch2))
         self._send_command('WRITE DDS REG')
 
-    def power_down(self, ch1, ch2):
+    def power_down(self, 
+                   ch1 : bool, 
+                   ch2 : bool):
         # Digital powerdown
         hex_str = self.make_header_string(0x0010, 1)+'91'
         self._send_mod_BTF(self.make_9int_list(hex_str, ch1, ch2))
         self._send_command('WRITE DDS REG')
 
-    def power_up(self, ch1, ch2):
+    def power_up(self, 
+                 ch1 : bool, 
+                 ch2 : bool):
         # Digital power-up. We don't turn on the ch2 HSTL trigger automatically
         hex_str = self.make_header_string(0x0010, 1)+'90'
         self._send_mod_BTF(self.make_9int_list(hex_str, ch1, ch2))
         self._send_command('WRITE DDS REG')
+        
+class AD9912_w_VVA(AD9912):
+    
+    def __init__(self, port_or_com : str,
+                 min_current : float,
+                 max_current : float,
+                 min_voltage : float,
+                 max_voltage : float,
+                 min_freq : float =10, 
+                 max_freq : float =400):
+        super().__init__(port_or_com, min_freq, max_freq)
+        self.min_current : float = min_current
+        self.max_current : float = max_current
+        self.min_voltage : float = min_voltage
+        self.max_voltage : float = max_voltage
+                
+    def setCurrent(self, 
+                   board : str, 
+                   ch1 : str, 
+                   ch2 : str, 
+                   current : float) -> None:
+        """
+        This function changes the output voltage of the DAC, which controls 
+        the attenuation using VVA. The non-linear value of the DDS is fixed 
+        to 0.
+        
+        Note that the output voltage value is 3 times smaller because of the 
+        hardware configuration. For example, If you set 3 V output, then it 
+        actually emits 1 V.
+        
+        Approximated values are
+            - 0.00 V: maximum attenuation, 60 dB
+            - 1.25 V: 50 dB
+            - 1.37 V: 40 dB
+            - 2.15 V: 20 dB
+            - 5.00 V: 10 dB
+            - 9.00 V:  5 dB
+            
+        It follows
+            - Atten. = 0.0252*(Voltage**2) - 2.2958*(Voltage) + 52.893
+        """
+        self.checkCurrentBound(current)
+        voltage = self.getVoltageFromCurrent(current)
+        dac_channel_idx = 2*(board-1)
+        chip_idx = dac_channel_idx // 4
+        channel_idx = dac_channel_idx % 4
+        if ch1:
+            self.voltage_register_update(chip_idx, channel_idx, voltage)
+        if ch2:
+            self.voltage_register_update(chip_idx, channel_idx+1, voltage)
+            
+        self.load_dac()
+     
+    def _setActualCurrent(self, 
+                          board : str, 
+                          ch1 : bool, 
+                          ch2 : bool, 
+                          current : int) -> None:
+        """
+        This function changes the output power of the given channels of the 
+        given board.
+        """
+        self.checkCurrentBound(current)
+        self.board_select(board)
+        
+        self._send_mod_BTF(
+            self._make_9int_list(
+                self._make_header_string(0x040C, 2)\
+                +('%04x' % current), ch1, ch2
+                )
+            ) 
+        self._send_command('WRITE DDS REG')
+    
+    def voltage_register_update(self, 
+                                chip : int, 
+                                channel : int, 
+                                voltage : float, 
+                                bipolar : bool = True, 
+                                v_ref : float = 7.5):
+        if bipolar:
+            input_code = int(65536/(4*v_ref)*voltage)
+            if (input_code < -32768) or (input_code > 32767): 
+                raise ValueError('Error in voltage_out: voltage is out of range')
+            code = (input_code + 65536) % 65536
+        else:
+            if voltage < 0: 
+                raise ValueError('Error in voltage_out: voltage cannot be \
+                                 negative with unipolar setting')
+            elif voltage > 17.5: 
+                raise ValueError('Error in voltage_out: voltage cannot be \
+                                 larger than 17.5 V')
+            code = int(65536/(4*v_ref)*voltage)
+            if (code > 65535): 
+                raise ValueError('Error in voltage_out: voltage is out of range')
+        message = [1<<chip, 0x04+channel, code // 256, code % 256]
+        self._send_mod_BTF(message)
+        self._send_command('WRITE DAC REG')
+    
+    def load_dac(self) -> None:
+        self._send_command('LDAC')
+    
+    def getVoltageFromCurrent(self, 
+                              current : int) -> None:
+        """
+        This functions scales the current value to adequate voltage.
+        Note that the current cannot be exceed 1000.
+        """
+        if current > 1000: current = 1000
+        voltage = current/200 + 1
+        return voltage
+    
+    def checkCurrentBound(self,
+                          current : float) -> None:
+        if (current < self.min_current) or (current > self.max_current):
+            raise ValueError ('Error in set_current: current should be between \
+                              %d and %d' % (self.min_current, self.max_current))

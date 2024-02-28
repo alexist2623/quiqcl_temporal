@@ -7,9 +7,6 @@ Created on Mon Oct 25 08:54:33 2021
 
 class default_parameters:
     
-    _fpga = None
-    _connected = False
-    
     min_freq_in_MHz = 0
     max_freq_in_MHz = 450
     
