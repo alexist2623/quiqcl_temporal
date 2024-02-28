@@ -8,9 +8,37 @@ import json
 import argparse
 import importlib
 import sys
-from sipyco.pc_rpc import simple_server_loop
+from fastapi import FastAPI
+from pydantic import BaseModel
+import uvicorn
 
+app = FastAPI()
 device_list : list[str] = [] 
+
+class RPC_parameter(BaseModel):
+    key : int
+    action: str
+    name: str
+    args: list
+    kwargs: dict
+
+@app.post("/call/")
+async def function_call(item: RPC_parameter) -> RPC_parameter:
+    object_name, method_name  = item.name.split('.')
+    obj = globals()[object_name]
+    method = getattr(obj, method_name)
+    if hasattr(item, 'args') and item.args != None:
+        if hasattr(item, 'kwargs') and item.kwargs != None:
+            return_value = method(*item.args, **item.kwargs)
+        else:
+            return_value = method(*item.args)
+    else:
+        if hasattr(item, 'kwargs') and item.kwargs != None:
+            return_value = method(**item.kwargs)
+        else:
+            return_value = method()
+        
+    return item
 
 class QQQServer:
     ip : str = "0.0.0.0"
@@ -33,8 +61,9 @@ def CreateQQQServer(json_file : str) -> QQQServer:
     for device_name, device_data in data.get('device', {}).items():
         module = importlib.import_module(device_data.get('import'))
         class_object = getattr(module,device_data.get('class'))(**device_data.get('args'))
-        for key, value in device_data.get('attr').items():
-            setattr(class_object, key, value)
+        if hasattr(device_data,'attr'):
+            for key, value in device_data.get('attr').items():
+                setattr(class_object, key, value)
         setDevice(device_name,class_object)    
 
 def setDevice(device_name : str,
@@ -50,8 +79,7 @@ def getDevice(device_name : str) -> object:
 def main(args):
     configuration = args.config if args.config else 'configuration.json'
     CreateQQQServer(configuration)
-    targets = {device : getDevice(device) for device in device_list}
-    simple_server_loop(targets, "::1", QQQServer.port, allow_parallel=False)
+    uvicorn.run(app, host="127.0.0.1", port=8000)
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Make QQQServer class based on\

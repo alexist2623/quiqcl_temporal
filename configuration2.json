@@ -1,0 +1,33 @@
+{
+    "server" : {
+        "ip" : "172.0.0.1",
+        "port" : 1001,
+        "path" : [
+            "C:/Jeonghyun/SNU_GIT/quiqcl-device"
+        ]
+    },
+    "device" : {
+        "ad9912_0" : {
+            "args" : {
+                "port_or_com" : "COM1",
+                "min_freq" : 10,
+                "max_freq" : 400
+            },
+            "class" : "AD9912",
+            "import" : "AD9912.ad9912"
+        },
+        "ad9912_vva" : {
+            "args" : {
+                "port_or_com" : "COM2",
+                "min_current" : 0,
+                "max_current" : 0,
+                "min_voltage" : 0,
+                "max_voltage" : 0,
+                "min_freq" : 10,
+                "max_freq" : 400
+            },
+            "class" : "AD9912_w_VVA",
+            "import" : "AD9912.ad9912"
+        }
+    }
+}
