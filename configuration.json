@@ -1,7 +1,7 @@
 {
     "server" : {
-        "ip" : "172.0.0.1",
-        "port" : 1001,
+        "ip" : "127.0.0.1",
+        "port" : 8000,
         "path" : [
             "C:/Jeonghyun/SNU_GIT/quiqcl-device"
         ]
