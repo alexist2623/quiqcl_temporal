@@ -1,18 +1,30 @@
 {
     "server" : {
         "ip" : "127.0.0.1",
-        "port" : 8000,
+        "port_list" : [
+            1,
+            2,
+            3
+        ]
         "path" : [
             "C:/Jeonghyun/SNU_GIT/quiqcl-device"
         ]
     },
     "device" : {
         "ad9912_0" : {
-            "args" : {
+            "args" : {  
                 "name" : "ad9912"
             },
             "class" : "dummy_class",
-            "import" : "dummy"
+            "import" : "dummy",
+            "notify_vars" : [
+                "frequency" : {
+                    "type" : "int"
+                },
+                "amplitude" : {
+                    "type" : "float"
+                }
+            ]
         }
     }
 }
