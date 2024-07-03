@@ -14,12 +14,13 @@ from PyQt5.QtNetwork import QTcpSocket
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget
 from PyQt5 import QtWidgets, uic
 
-DEBUG = 1
+DEBUG = 0
 
 class TCPSendHandler(QThread):
     
-    def __init__(self, parent, socket_inst):
+    def __init__(self, parent, client_socket):
         super().__init__(parent)
+        self.client_socket = client_socket
         self._msg_queue = queue.Queue()
         self.parent = parent
             
@@ -33,7 +34,7 @@ class TCPSendHandler(QThread):
         
     def sendMessage(self, item : json = None) -> None:
         if not DEBUG:
-            self.client_socket.sendall(item.encode('utf-8'))
+            self.client_socket.sendall(json.dumps(item).encode('utf-8'))
         else:
             print(item)
             
@@ -82,6 +83,8 @@ class TCPListenHandler(QThread):
                     print(error_data)
                     raise Exception("Server error")
             else:
+                for _name, _value in response.items():
+                    setattr(self,_name,_value)
                 self.message_received.emit(response)
                 
 
@@ -112,9 +115,7 @@ class JsonRPCClient:
     
     def _get_all_attr(self) -> None:
         if not DEBUG:
-            attr_dict = self.__do_rpc("getallattr", None)
-            for _name, _value in attr_dict.items():
-                setattr(self,_name,_value)
+            self.__do_rpc("getallattr", None)
 
 def RPCparameter(
     method: str,
@@ -139,8 +140,8 @@ form_window = uic.loadUiType("test.ui")[0]
 class UiMainWindow(QtWidgets.QMainWindow, form_window):
     def __init__(self):
         super().__init__()
-        host : str = "0.0.0.0"
-        port : int = 0
+        host : str = "127.0.0.1"
+        port : int = 2
         if not DEBUG:
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.client_socket.connect((host, port))
@@ -153,7 +154,7 @@ class UiMainWindow(QtWidgets.QMainWindow, form_window):
         self.tcp_listen_handler = TCPListenHandler(self, self.client_socket)
         self.tcp_listen_handler.start()
         self.tcp_send_handler.start()
-        self.ad9910 = JsonRPCClient(self.tcp_send_handler,"ad9910")
+        self.ad9910 = JsonRPCClient(self.tcp_send_handler,"ad9912_0")
         
     def hi(self):
         self.ad9910.hello()

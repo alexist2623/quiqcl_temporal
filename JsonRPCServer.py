@@ -12,79 +12,97 @@ import importlib
 import threading
 import queue
 
-device_list : list[str] = [] 
 clients: list = []
-
 
 class JsonRPCServer:
     host : str = None
-    port : int = None
-    def __init__(self, host : str = "0.0.0.0", port : int = 0):
-        self.host = host
-        self.port = port
-        self.socket : socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.bind((host, port))
+    port_list : int = None
+    device_list : dict[str : object] = {}
+    thread_list : dict[int : threading.Thread] = {}
+    
+    def __init__(self):
+        self.sockets : dict[socket] = {}
+        self.conn : dict[int : object] = {}
+        for port in self.port_list:
+            self.sockets[port] = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
+            self.sockets[port].bind((self.host, port))
+            self.sockets[port].listen()
+            self.thread_list[port] = threading.Thread(target=self.listen, args=(port, ))
+            self.thread_list[port].daemon = True
+            self.thread_list[port].start()
+            
+        self._message_queue = queue.Queue()
     
     @classmethod
     def SetClassVars(cls, **kwargs) -> None:
         for key, value in kwargs.items():
             setattr(cls, key, value)
                 
-    def listen(self):
+    def listen(self, port : int) -> None:
+        print(f">> Server host : {self.host}, port : {port} opened")
         while True:
-            self.socket.listen()
-
-                    
-def functionCall(item: json) -> json:
-    object_id, method_id  = item.id.split('.')
-    obj = globals()[object_id]
-    method = getattr(obj, method_id)
-    if hasattr(item, 'kwargs') and item.kwargs:
-        return_value = method(**item.kwargs)
-    else:
-        return_value = method()
-    notify(object_id)
-    return RPC_response(
-        status = "OK", 
-        id = object_id,
-        value = return_value
-    )
-
-
-def notify(object_id : str) -> None:
-    data = globals()[object_id].get_changed_attributes()
-    for client in clients:
-        print(client)
-        client.send_text(json.dumps(data))
+            conn, addr = self.sockets[port].accept()
+            self.conn[port] = conn
+            print(f"Connection from {addr} on port {port}")
+            while True:
+                message = conn.recv(1024)
+                json_data = json.loads(message.decode('utf-8'))
+                self._message_queue.put(json_data)
+            conn.close()
     
-def RPC_response(
-    status : str,
-    id_value: str,
-    value: object) -> json:
+    def run(self):
+        while True:
+            if not self._message_queue.empty():
+                message = self._message_queue.get()
+                print(message)
+                self.functionCall(message)
+                    
+    def functionCall(self, item: json) -> None:
+        object_name = item["name"]
+        method_name = item["method"]
+        obj = self.device_list[object_name]
+        method = getattr(obj, method_name)
+        if item["params"]:
+            return_value = method(obj, **item["params"])
+        else:
+            return_value = method(obj)
+            
+        self.notify(object_name)
+        
+        return
+    
+    def notify(self, object_name : str) -> None:
+        data = self.device_list[object_name].get_changed_attributes()
+        item = RPCResponse(
+            result = data,
+            name = object_name
+        )
+        for port, conn in self.conn.items():
+            conn.sendall(item.encode('utf-8'))
+    
+def RPCResponse(
+        result: object,
+        name : str) -> json:
     
     item = {
-        "status" : status,
-        "id": id_value,
-        "value": {
-            "value" : value,
-            "type" : str(type(value))
-        }
+        "result" : result,
+        "name" : name
     }
-    return item
+    return json.dumps(item)
 
 def getAllValue(item: json) -> json:
-    object_id = item.id
-    obj = globals()[object_id]
-    return RPC_response(
-        status = "OK", 
-        id = object_id,
-        value = vars(obj))
+    object_name = item.name
+    obj = globals()[object_name]
+    return RPCResponse(
+        name = object_name,
+        result = vars(obj)
+    )
 
 def setVariable(item: json) -> json:
-    object_id = item.id
-    return RPC_response(
+    object_name = item.name
+    return RPCResponse(
         status = "OK", 
-        id_value = object_id,
+        name_value = object_name,
         value = None)
 
 def CreateJsonRPCServer(json_file : str) -> JsonRPCServer:
@@ -93,30 +111,34 @@ def CreateJsonRPCServer(json_file : str) -> JsonRPCServer:
     JsonRPCServer.SetClassVars(**data['server'])
     for path in JsonRPCServer.path:
         sys.path.append(path) 
-    for device_id, device_data in data.get('device', {}).items():
+    for device_name, device_data in data.get('device', {}).items():
         module = importlib.import_module(device_data.get('import'))
         class_object = getattr(module,device_data.get('class'))(**device_data.get('args'))
         if hasattr(device_data,'attr'):
             for key, value in device_data.get('attr').items():
                 setattr(class_object, key, value)
-        setDevice(device_id,class_object)    
+        setDevice(device_name,class_object)   
+    
+    json_rpc_server = JsonRPCServer()
+    return json_rpc_server
         
+def getallattr(self):
+    return {k: v for k, v in self.__dict__.items() if not callable(v)}
 
-def setDevice(device_id : str,
+def setDevice(device_name : str,
               class_object : object) -> None:
-    setattr(class_object,'id', device_id)
+    setattr(class_object,'name', device_name)
     setattr(class_object,'_changed_attributes', set())
-    globals()[device_id] = class_object
+    setattr(class_object,'getallattr',getallattr)
+    JsonRPCServer.device_list[device_name] = class_object
     class_object.get_changed_attributes()
-    device_list.append(device_id)
+    
     return
     
-def getDevice(device_id : str) -> object:
-    return globals()[device_id]
-
 def main(args):
     configuration = args.config if args.config else 'configuration.json'
-    CreateJsonRPCServer(configuration)
+    json_rpc_server = CreateJsonRPCServer(configuration)
+    json_rpc_server.run()
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

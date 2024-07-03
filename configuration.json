@@ -1,11 +1,11 @@
 {
     "server" : {
-        "ip" : "127.0.0.1",
+        "host" : "127.0.0.1",
         "port_list" : [
             1,
             2,
             3
-        ]
+        ],
         "path" : [
             "C:/Jeonghyun/SNU_GIT/quiqcl-device"
         ]
@@ -18,12 +18,7 @@
             "class" : "dummy_class",
             "import" : "dummy",
             "notify_vars" : [
-                "frequency" : {
-                    "type" : "int"
-                },
-                "amplitude" : {
-                    "type" : "float"
-                }
+                "frequency" , "amplitude"
             ]
         }
     }
