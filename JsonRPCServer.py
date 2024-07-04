@@ -11,6 +11,7 @@ import socket
 import importlib
 import threading
 import queue
+from types import MethodType
 
 clients: list = []
 
@@ -63,21 +64,23 @@ class JsonRPCServer:
         obj = self.device_list[object_name]
         method = getattr(obj, method_name)
         if item["params"]:
-            return_value = method(obj, **item["params"])
+            return_value = method(**item["params"])
         else:
-            return_value = method(obj)
+            return_value = method()
             
         self.notify(object_name)
         
         return
     
     def notify(self, object_name : str) -> None:
-        data = self.device_list[object_name].get_changed_attributes()
+        data = self.device_list[object_name].getChangedAttributes()
         item = RPCResponse(
-            result = data,
+            result = {key : getattr(self.device_list[object_name],key) 
+                      for key in data},
             name = object_name
         )
         for port, conn in self.conn.items():
+            print(item)
             conn.sendall(item.encode('utf-8'))
     
 def RPCResponse(
@@ -124,14 +127,13 @@ def CreateJsonRPCServer(json_file : str) -> JsonRPCServer:
         
 def getallattr(self):
     return {k: v for k, v in self.__dict__.items() if not callable(v)}
-
+        
 def setDevice(device_name : str,
               class_object : object) -> None:
     setattr(class_object,'name', device_name)
-    setattr(class_object,'_changed_attributes', set())
-    setattr(class_object,'getallattr',getallattr)
+    class_object.getallattr = MethodType(getallattr, class_object)
     JsonRPCServer.device_list[device_name] = class_object
-    class_object.get_changed_attributes()
+    class_object.getChangedAttributes()
     
     return
     

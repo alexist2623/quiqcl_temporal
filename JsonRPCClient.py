@@ -45,11 +45,12 @@ class TCPListenHandler(QThread):
         super().__init__(parent)
         self.parent = parent
         self.client_socket = client_socket
+        self.message_received.connect(self.parent.notified)
                 
     def run(self):
         while True:
             response = json.loads(self.client_socket.recv(1024).decode('utf-8'))
-            
+            print(response)
             if hasattr(response, "error"):
                 error_code = response["error"]["code"]
                 error_message = response["error"]["message"]
@@ -83,9 +84,7 @@ class TCPListenHandler(QThread):
                     print(error_data)
                     raise Exception("Server error")
             else:
-                for _name, _value in response.items():
-                    setattr(self,_name,_value)
-                self.message_received.emit(response)
+                self.message_received.emit(json.dumps(response))
                 
 
 class JsonRPCClient:
@@ -154,10 +153,18 @@ class UiMainWindow(QtWidgets.QMainWindow, form_window):
         self.tcp_listen_handler = TCPListenHandler(self, self.client_socket)
         self.tcp_listen_handler.start()
         self.tcp_send_handler.start()
-        self.ad9910 = JsonRPCClient(self.tcp_send_handler,"ad9912_0")
+        
+        self.ad9912_0 = JsonRPCClient(self.tcp_send_handler,"ad9912_0")
         
     def hi(self):
-        self.ad9910.hello()
+        self.ad9912_0.hello()
+    
+    def notified(self, message) -> None:
+        response = json.loads(message)
+        print(response["result"])
+        # class_obj = getattr(self,response["name"])
+        # for _name, _value in response["result"].items():
+        #     setattr(class_obj,_name,_value)
         
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
