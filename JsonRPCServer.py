@@ -44,11 +44,15 @@ class JsonRPCServer:
         while True:
             conn, addr = self.sockets[port].accept()
             self.conn[port] = conn
-            print(f"Connection from {addr} on port {port}")
+            print(f">> Connection from {addr} on port {port}")
             while True:
-                message = conn.recv(1024)
-                json_data = json.loads(message.decode('utf-8'))
-                self._message_queue.put(json_data)
+                try:
+                    message = conn.recv(1024)
+                    json_data = json.loads(message.decode('utf-8'))
+                    self._message_queue.put(json_data)
+                except:
+                    print(f">> Connection from port {port} is lost")
+                    break
             conn.close()
     
     def run(self):
@@ -120,13 +124,20 @@ def CreateJsonRPCServer(json_file : str) -> JsonRPCServer:
         if hasattr(device_data,'attr'):
             for key, value in device_data.get('attr').items():
                 setattr(class_object, key, value)
-        setDevice(device_name,class_object)   
+        setattr(class_object, "_notify_vars",device_data["_notify_vars"])
+        for k in device_data["_notify_vars"]:
+            if not hasattr(class_object, k):
+                setattr(class_object, k, 0)
+        setDevice(device_name,class_object)
     
     json_rpc_server = JsonRPCServer()
     return json_rpc_server
         
 def getallattr(self):
-    return {k: v for k, v in self.__dict__.items() if not callable(v)}
+    for k in self._notify_vars:
+        if not hasattr(self,k):
+            setattr(self,k,None)
+        self._changed_attributes.add(k)
         
 def setDevice(device_name : str,
               class_object : object) -> None:

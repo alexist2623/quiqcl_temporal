@@ -91,14 +91,19 @@ class JsonRPCClient:
     def __init__(self, tcp_send_handler : TCPSendHandler, name : str = ""):
         self.tcp_send_handler : TCPSendHandler = tcp_send_handler
         self.name : str = name
+        self._notify_vars = []
         self._get_all_attr()
     
     def __getattr__(self, method):
-        def proxy(*args, **params):
-            if len(args) != 0:
-                raise Exception("only key based params are supported")
-            return self.__do_rpc(method, params)
-        return proxy
+        print(method)
+        if method == "_notify_vars" or method in self._notify_vars:
+            return object.__getattribute__(self, method)
+        else:
+            def proxy(*args, **params):
+                if len(args) != 0:
+                    raise Exception("only key based params are supported")
+                return self.__do_rpc(method, params)
+            return proxy
 
     def __do_rpc(self, 
                  method : str, 
@@ -137,13 +142,13 @@ def RPCparameter(
 
 form_window = uic.loadUiType("test.ui")[0]
 class UiMainWindow(QtWidgets.QMainWindow, form_window):
-    def __init__(self):
+    def __init__(self, host : str = "127.0.0.1", port : int = 2):
         super().__init__()
-        host : str = "127.0.0.1"
-        port : int = 2
+        self.host : str = host
+        self.port : int = port
         if not DEBUG:
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.client_socket.connect((host, port))
+            self.client_socket.connect((self.host, self.port))
         else:
             self.client_socket = None
         self.setupUi(self)
@@ -162,13 +167,18 @@ class UiMainWindow(QtWidgets.QMainWindow, form_window):
     def notified(self, message) -> None:
         response = json.loads(message)
         print(response["result"])
-        # class_obj = getattr(self,response["name"])
-        # for _name, _value in response["result"].items():
-        #     setattr(class_obj,_name,_value)
+        class_obj = getattr(self,response["name"])
+        for k, v in response["result"].items():
+            if not k in class_obj._notify_vars:
+                class_obj._notify_vars.append(k)
+            setattr(class_obj,k,v)
+        print(class_obj.frequency)
         
 if __name__ == '__main__':
+    host = "127.0.0.1"
+    port : int = int(input())
     app = QtWidgets.QApplication(sys.argv)
-    main_window = UiMainWindow()
+    main_window = UiMainWindow(host, port)
     sys.exit(app.exec_())
     
 

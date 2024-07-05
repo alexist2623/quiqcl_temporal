@@ -7,13 +7,17 @@ Created on Wed Feb 28 14:17:13 2024
 
 class dummy_class:
     def __init__(self, name : str):
-        self._changed_attributes = set()
         self.a = 1
         print('hihihi' + name)
         
     def __setattr__(self, name, value):
-        if not name == '_changed_attributes':
-            self._changed_attributes.add(name)
+        if (not name == '_changed_attributes') and (not name == '_notify_vars'):
+            if not hasattr(self, "_changed_attributes"):
+                self._changed_attributes = set()
+            if not hasattr(self, "_notify_vars"):
+                self._notify_vars = []
+            if name in self._notify_vars:
+                self._changed_attributes.add(name)
         super().__setattr__(name, value)
     
     def getChangedAttributes(self):
@@ -27,5 +31,6 @@ class dummy_class:
         print(self.a)
         
     def hello(self):
+        self.frequency = self.frequency + 1
         self.a = 30
         print("hello")

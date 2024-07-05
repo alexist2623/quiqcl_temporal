@@ -17,7 +17,7 @@
             },
             "class" : "dummy_class",
             "import" : "dummy",
-            "notify_vars" : [
+            "_notify_vars" : [
                 "frequency" , "amplitude"
             ]
         }
